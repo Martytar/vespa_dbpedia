@@ -1,0 +1,68 @@
+schema news {
+    document news {
+        field news_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field description type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field title_embeddings type tensor<float>(d0[512]) {
+            indexing: index | attribute | summary
+            attribute {
+                distance-metric: innerproduct
+            }
+            index {
+                hnsw {
+                    max-links-per-node: 16
+                    neighbors-to-explore-at-insert: 200
+                }
+            }
+        }
+        field description_embeddings type tensor<float>(d0[512]) {
+            indexing: index | attribute | summary
+            attribute {
+                distance-metric: innerproduct
+            }
+            index {
+                hnsw {
+                    max-links-per-node: 16
+                    neighbors-to-explore-at-insert: 200
+                }
+            }
+        }
+    }
+
+    fieldset default {
+        fields: title, description
+    }
+
+    rank-profile bm25 inherits default {
+        first-phase {
+            expression: bm25(title) + bm25(description)
+        }
+    }
+
+    rank-profile colbert inherits default {
+        inputs {
+            query(query_embedding) tensor<float>(d0[512])
+        }
+        first-phase {
+            expression: closeness(title_embeddings)
+        }
+    }
+
+    rank-profile hybrid inherits default {
+        inputs {
+            query(query_embedding) tensor<float>(d0[512])
+        }
+        first-phase {
+            expression: (bm25(title) + bm25(description)) * 0.6 + closeness(title_embeddings) * 0.4
+        }
+    }
+}
